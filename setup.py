@@ -1,7 +1,8 @@
 from setuptools import setup, find_packages
 import subprocess
+import sys
 
-subprocess.run(["make"])
+subprocess.run(["make"], stdout=sys.stdout, stderr=sys.stderr, check=True)
 
 setup(
     name='plato',

@@ -156,7 +156,7 @@ class Neigh
         int Query(const STEP &cur_step, const double q_cutoff, const vector<int> &neighbor_atoms_flag, const int &center_AtomIndex, \
             vector<int> &Vector_destin_index, vector<double> &Vector_destin_r2);
         int BuildNeighborList(const STEP &cur_step, const double cutoff, const vector<int> &center_atoms_flag, const vector<int> &neighbor_atoms_flag, \
-            vector< vector<int> > &Vector_destin_index, vector< vector<double> > &Vector_destin_r2);
+            vector<int> &Vector_destin_count, vector< vector<int> > &Vector_destin_index, vector< vector<double> > &Vector_destin_r2);
         
         /* functions related to analyzing clustering based on cutoff distance */
         int Cluster(const STEP &cur_step, const double cutoff, const vector<int> &cluster_atoms_flag, vector<int> &Vector_destin);

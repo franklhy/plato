@@ -364,7 +364,7 @@ int Neigh::Query(const STEP &cur_step, const double q_cutoff, const vector<int> 
 }
 
 int Neigh::BuildNeighborList(const STEP &cur_step, const double cutoff, const vector<int> &center_atoms_flag, const vector<int> &neighbor_atoms_flag, \
-vector< vector<int> > &Vector_destin_index, vector< vector<double> > &Vector_destin_r2)
+vector<int> &Vector_destin_count, vector< vector<int> > &Vector_destin_index, vector< vector<double> > &Vector_destin_r2)
 {
     if ( cur_step.Atoms.size() != center_atoms_flag.size() || cur_step.Atoms.size() != neighbor_atoms_flag.size() )
     {
@@ -375,6 +375,7 @@ vector< vector<int> > &Vector_destin_index, vector< vector<double> > &Vector_des
     // prepare bin pair list, and assign atoms to bins
     if( Prepare(cur_step,cutoff,neighbor_atoms_flag) )
         return 1;
+    vector<int> neigh_count(cur_step.NumOfAtoms);
     vector< vector<int> > neigh_index(cur_step.NumOfAtoms);
     vector< vector<double> > neigh_r2(cur_step.NumOfAtoms);
 
@@ -394,17 +395,18 @@ vector< vector<int> > &Vector_destin_index, vector< vector<double> > &Vector_des
                 vector<int>().swap(atom_neigh_index);
                 vector<double>().swap(atom_neigh_r2);
             }
+            neigh_count[ai] = (int)atom_neigh_index.size();
             neigh_index[ai] = atom_neigh_index;
             neigh_r2[ai] = atom_neigh_r2;
         }
     }
 
+    vector<int>().swap(Vector_destin_count);
     vector< vector<int> >().swap(Vector_destin_index);
     vector< vector<double> >().swap(Vector_destin_r2);
+    Vector_destin_count = neigh_count;
     Vector_destin_index = neigh_index;
     Vector_destin_r2 = neigh_r2;
-    //vector< vector<int> >().swap(neigh_index);
-    //vector< vector<double> >().swap(neigh_r2);
 
     return 0;
 }
@@ -412,9 +414,10 @@ vector< vector<int> > &Vector_destin_index, vector< vector<double> > &Vector_des
 int Neigh::Cluster(const STEP &cur_step, const double cutoff, const vector<int> &cluster_atoms_flag, vector<int> &Vector_destin)
 {
     // build neighbor list
+    vector<int> neigh_count(cur_step.NumOfAtoms);
     vector< vector<int> > neigh_index(cur_step.NumOfAtoms);
     vector< vector<double> > neigh_r2(cur_step.NumOfAtoms);
-    if( BuildNeighborList(cur_step,cutoff,cluster_atoms_flag,cluster_atoms_flag,neigh_index,neigh_r2) )
+    if( BuildNeighborList(cur_step,cutoff,cluster_atoms_flag,cluster_atoms_flag,neigh_count,neigh_index,neigh_r2) )
         return 1;
 
     // Breath First Search algorithm
@@ -471,9 +474,10 @@ int Neigh::RDF(const STEP &cur_step, const double cutoff, const int nbins, const
 vector<double> &Vector_destin_r, vector<double> &Vector_destin_g)
 {
     // build neighbor list
+    vector<int> neigh_count(cur_step.NumOfAtoms);
     vector< vector<int> > neigh_index(cur_step.NumOfAtoms);
     vector< vector<double> > neigh_r2(cur_step.NumOfAtoms);
-    if( BuildNeighborList(cur_step,cutoff,center_atoms_flag,neighbor_atoms_flag,neigh_index,neigh_r2) )
+    if( BuildNeighborList(cur_step,cutoff,center_atoms_flag,neighbor_atoms_flag,neigh_count,neigh_index,neigh_r2) )
         return 1;
    
     // set up the vector to record the rdf
@@ -575,11 +579,12 @@ vector< vector<int> > &Vector_destin_pair_index, vector< vector<double> > &Vecto
             r[pi][i] = bin_size * i + half_bin_size;
     
     // build neighbor list
+    vector<int> neigh_count(cur_step.NumOfAtoms);
     vector< vector<int> > neigh_index(cur_step.NumOfAtoms);
     vector< vector<double> > neigh_r2(cur_step.NumOfAtoms);
     vector<int> center_atoms_flag(cur_step.NumOfAtoms, 1);
     vector<int> neighbor_atoms_flag(cur_step.NumOfAtoms, 1);
-    if( BuildNeighborList(cur_step, cutoff, center_atoms_flag, neighbor_atoms_flag, neigh_index, neigh_r2) )
+    if( BuildNeighborList(cur_step, cutoff, center_atoms_flag, neighbor_atoms_flag, neigh_count, neigh_index, neigh_r2) )
         return 1;
 
     // calculate rdf

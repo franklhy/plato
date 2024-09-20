@@ -9,7 +9,7 @@ class neigh:
                                                                     # Set the simluation topology for analysis. "d" should be an instance of data class.
         neigh_list, dist_list = ne.query(cutoff, centerAtomIndex, force_prepare=True)
                                                                     # Find the neighbor atoms within a cutoff distance from a given atom.
-        neigh_list, dist_list = ne.neighbor_analysis(cutoff, center_mask=None, neighbor_mask=None)
+        neigh_count, neigh_list, dist_list = ne.neighbor_analysis(cutoff, center_mask=None, neighbor_mask=None)
                                                                     # Build the neighbor list.
         cluster_id = ne.cluster_analysis(cutoff, cluster_mask=None)
                                                                     # Cluster analysis based on cutoff distance criterion
@@ -210,6 +210,9 @@ class neigh:
                 By default (None), all atoms in current snapshot can be neighbor atoms.
 
         Return:
+            neighbor_count: python list of int
+                Number of neighbor atoms in current snapshot. i.e. neighbor_count[index] = number of neighbor
+                for a center atom whose atom index is "index".
             neighbor_list: python list of tuples
                 Atom index of neighbor atoms for each atom in current snapshot. i.e. neighbor_list[index] is 
                 a list of atom index of neighbor atoms for a center atom whose atom index is "index".
@@ -233,7 +236,7 @@ class neigh:
             cutoff = 2.5
             center_mask = atoms[:,TYPE] == 1
             neighbor_mask = atoms[:,TYPE] == 2
-            neighbor_list, distance_list = ne.neighbor_analysis(cutoff, center_mask, neighbor_mask)
+            neighbor_count, neighbor_list, distance_list = ne.neighbor_analysis(cutoff, center_mask, neighbor_mask)
             ### print out neighbor information
             atomindex = 0
             #atomid = 1
@@ -269,12 +272,14 @@ class neigh:
         _ConvertToC_Int(Cmask_center, center_atoms_mask)
         _ConvertToC_Int(Cmask_neighbor, neighbor_atoms_mask)
 
+        tmp_vec_int = _VecInt()
         tmp_vec_vec_int = _VecVecInt()
         tmp_vec_vec_double = _VecVecDouble()
-        ret = self._neigh.BuildNeighborList(self._step, cutoff, Cmask_center, Cmask_neighbor, tmp_vec_vec_int, tmp_vec_vec_double)
+        ret = self._neigh.BuildNeighborList(self._step, cutoff, Cmask_center, Cmask_neighbor, tmp_vec_int, tmp_vec_vec_int, tmp_vec_vec_double)
         if ret != 0:
             raise RuntimeError("Failed to build neighbor list.")
         _Sqrt_2dDouble(tmp_vec_vec_double)
+        neighbor_count = list(tmp_vec_int)
         neighbor_list = list(tmp_vec_vec_int)
         distance_list = list(tmp_vec_vec_double)
 
@@ -285,7 +290,7 @@ class neigh:
         ### c++ header file Neigh.h for detailed reasons.
         self._prepare_flag = False
 
-        return neighbor_list, distance_list
+        return neighbor_count, neighbor_list, distance_list
 
     def cluster_analysis(self, cutoff, cluster_mask=None):
         """
