@@ -12,3 +12,5 @@ During the installation, it will run the Makefile by `make`. To see the output o
 ```
 pip install . -v
 ```
+
+**Note:** The `numpy.i` file in `code/helper` might not be compatible with SWIG versions newer than 4.0. If you run into SWIG-related installation issues, try downloading a compatible or updated version of `numpy.i` and replacing the existing file in `code/helper`.
