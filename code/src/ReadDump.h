@@ -39,8 +39,10 @@
 /***                                                                                                ***/
 /******************************************************************************************************/
 /*** Major revision compared to previous version (X.X version):                                     ***/
+/*** (1) Add: Now read dump local file, and update topology (bond, angle, dihedral, improper) in    ***/
+/***     STEP structure.                                                                            ***/
 /******************************************************************************************************/
-/*** Version: 07/16/2016 (1.0 Version)  ***/
+/*** Version: 05/19/2026 (1.1 Version)  ***/
 /*** By: Heyi Liang                     ***/
 /******************************************/
 
@@ -67,10 +69,10 @@ class ReadDump
         int wrapped_flag;
         int scaled_flag;
         int ID,TYPE,MOL,X,Y,Z,IX,IY,IZ,VX,VY,VZ,WX,WY,WZ,FX,FY,FZ,Q;
+        int BTYPE,BATOM1,BATOM2,ATYPE,AATOM1,AATOM2,AATOM3,DTYPE,DATOM1,DATOM2,DATOM3,DATOM4,ITYPE,IATOM1,IATOM2,IATOM3,IATOM4;
 
         FILE* pFile;
-        char* line;
-        char* block;
+        char *line, *label, *block;
 
         /** functions that are only called by constructor **/
         int CheckAndScanFile();                                             // read the file and get all the timesteps 

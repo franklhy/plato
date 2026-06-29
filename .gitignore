@@ -1,5 +1,6 @@
 plato/*
 !plato/__init__.py
+code/helper/numpy.i
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

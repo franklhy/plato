@@ -9,8 +9,11 @@ class data:
         d.read("data.atom")                                # Read the data file "data.atom". The format will be determined according to the data file.
         d.set_traj_file("dump.atom")                       # Set a dump file as the trajactory while keeping the topology (bond,angle,...) information
         d.set_traj_files("dump1", "dump2", ...)            # Set multiple dump files as the trajactory
+        d.set_topo_file("dump.bond")                       # Set a dump local file as the topology information
+        d.set_topo_files("dump1", "dump2", ...)            # Set multiple dump local files as the topology
         alltime = d.traj_time()                            # Return all timesteps in the trajactory dump file
         d.load_traj(i)                                     # Read the ith frame from the trajactory dump file
+        d.load_topo(i)                                     # Read the ith frame from the topology dump local file
         d.wrap()                                           # Calculate wrapped unscaled coordinate.
         d.unwrap()                                         # Calculate unwrapped unscaled coordinate.
         X, Y, Z = d.map("x","y","z")                       # Find the index for required properties.
@@ -43,13 +46,25 @@ class data:
         """
         self._print_flag = False
         self._data = _ReadData()
-        self._dumps = None
+        self._dumps = self.dumps()    # dump files container for trajectory.
+        self._dumps_topo = self.dumps()    # dump files container for topology information
         self._step = _STEP()
-        self._timesteps = None
-        self._frame_dict = None    # key: frame index; value: (dumpfile index, frame index of the dumpfile, timestep)
         self._idmapping_atom = _VecInt()
         self._writer = _WriteData()
 
+    class dumps:
+        """
+        dumps()
+            A nested helper class for dump file information. It is used to store the dump file information when multiple dump files are read as trajectory.
+
+        Parameters:
+            None.
+        """
+        def __init__(self):
+            self._dumpfile = None
+            self._timesteps = None
+            self._frame_dict = None    # key: frame index; value: (dumpfile index, frame index of the dumpfile, timestep)
+            
     def print_info(self, print_flag=False):
         """
         print_info(print_flag)
@@ -115,9 +130,9 @@ class data:
         Return:
             None.
         """
-        def check_atom_id_and_type(tmp_dump, dumpfile):
+        def check_atom_id(tmp_dump, dumpfile):
             """
-            check atom id and type, they should be identical to those in data file (stored in self._step)
+            check atom id, they should be identical to those in data file (stored in self._step)
             """
             tmp_step = _STEP()
             ret = tmp_dump.Read_Frame(0, tmp_step)
@@ -127,57 +142,48 @@ class data:
             ret, tmpID = tmp_dump.PropertyMapping("id", tmp_step)
             if ret:
                 raise RuntimeError("Fail to map property \"id\" from trajectory dump file %s." % dumpfile)
-            ret, tmpTYPE = tmp_dump.PropertyMapping("type", tmp_step)
-            if ret:
-                raise RuntimeError("Fail to map property \"type\" from trajectory dump file %s." % dumpfile)
             tmp_orderid = np.argsort(tmp_atoms[:,tmpID])
             tmpaid = tmp_atoms[tmp_orderid][:,tmpID]
-            tmpatype = tmp_atoms[tmp_orderid][:,tmpTYPE]
 
             atoms = _ConvertToNumpy_VecVecDouble(self._step.Atoms)
             ret, ID = self._data.PropertyMapping("id", self._step)
             if ret:
                 raise RuntimeError("Fail to map property \"id\" from data file.")
-            ret, TYPE = self._data.PropertyMapping("type", self._step)
-            if ret:
-                raise RuntimeError("Fail to map property \"type\" from data file.")
             orderid = np.argsort(atoms[:,ID])
             aid = atoms[orderid][:,ID]
-            atype = atoms[orderid][:,TYPE]
-
-            if not np.array_equal(aid, tmpaid) or not np.array_equal(atype, tmpatype):
-                raise RuntimeError("The trajectory dump file %s has different atoms then data file." % dumpfile)
+            if not np.array_equal(aid, tmpaid):
+                raise RuntimeError("The trajectory dump file %s has different atoms id than data file." % dumpfile)
 
         tmp_VecInt = _VecInt()
         if len(dumpfiles) > 0:
-            self._dumps = [_ReadDump(dumpfile) for dumpfile in dumpfiles]
+            self._dumps._dumpfile = [_ReadDump(dumpfile) for dumpfile in dumpfiles]
 
             # the first dump file
-            check_atom_id_and_type(self._dumps[0], dumpfiles[0])
-            _ = self._dumps[0].GetTimesteps(tmp_VecInt)
-            self._timesteps = np.array(list(tmp_VecInt))
-            self._frame_dict = {ii: (0, ii, self._timesteps[ii]) for ii in range(len(self._timesteps))}
+            check_atom_id(self._dumps._dumpfile[0], dumpfiles[0])
+            _ = self._dumps._dumpfile[0].GetTimesteps(tmp_VecInt)
+            self._dumps._timesteps = np.array(list(tmp_VecInt))
+            self._dumps._frame_dict = {ii: (0, ii, self._dumps._timesteps[ii]) for ii in range(len(self._dumps._timesteps))}
 
             # the remaining dump files
             for i in range(1,len(dumpfiles)):
-                check_atom_id_and_type(self._dumps[i], dumpfiles[i])
-                _ = self._dumps[i].GetTimesteps(tmp_VecInt)
+                check_atom_id(self._dumps._dumpfile[i], dumpfiles[i])
+                _ = self._dumps._dumpfile[i].GetTimesteps(tmp_VecInt)
                 tmp_timesteps = np.array(list(tmp_VecInt))
-                if require_same_dump_freq and tmp_timesteps[1] - tmp_timesteps[0] != self._timesteps[1] - self._timesteps[0]:
+                if require_same_dump_freq and tmp_timesteps[1] - tmp_timesteps[0] != self._dumps._timesteps[1] - self._dumps._timesteps[0]:
                     raise RuntimeError("Dump files don't share the same dump frequency.")
                 ### if the first timestep is 0, it assumes the first timestep is the same as the last timestep from the previous dump file
                 if tmp_timesteps[0] == 0:
-                    tmp_timesteps += self._timesteps[-1]
+                    tmp_timesteps += self._dumps._timesteps[-1]
                 for ii in range(len(tmp_timesteps)):
-                    if tmp_timesteps[ii] in self._timesteps:
+                    if tmp_timesteps[ii] in self._dumps._timesteps:
                         if overwrite:
-                            ind = np.where(self._timesteps == tmp_timesteps[ii])[0][0]
+                            ind = np.where(self._dumps._timesteps == tmp_timesteps[ii])[0][0]
                             print("timestep %d: replace dump file no.%d frame no.%d -> dump file no.%d frame no.%d" % 
-                                  (tmp_timesteps[ii], self._frame_dict[ind][0]+1, self._frame_dict[ind][1]+1, i+1, ii+1))
-                            self._frame_dict[ind] = (i, ii, tmp_timesteps[ii])
+                                  (tmp_timesteps[ii], self._dumps._frame_dict[ind][0]+1, self._dumps._frame_dict[ind][1]+1, i+1, ii+1))
+                            self._dumps._frame_dict[ind] = (i, ii, tmp_timesteps[ii])
                     else:
-                        self._timesteps = np.append(self._timesteps, tmp_timesteps[ii])
-                        self._frame_dict[len(self._timesteps)-1] = (i, ii, tmp_timesteps[ii])
+                        self._dumps._timesteps = np.append(self._dumps._timesteps, tmp_timesteps[ii])
+                        self._dumps._frame_dict[len(self._dumps._timesteps)-1] = (i, ii, tmp_timesteps[ii])
         else:
             raise RuntimeError("no dump file is provided.")
 
@@ -190,10 +196,72 @@ class data:
             dumpfile: string
                 Name of LAMMPS dump file.
 
-        Returun:
+        Return:
             None.
         """
         self.set_traj_files(dumpfile)
+
+    def set_topo_files(self, *dumplocalfiles, overwrite=True, require_same_dump_freq=True):
+        """
+        set_topo_files(dumplocalfile1, dumplocalfile2, ...)
+            Set multiple dump local files (dumplocalfile1, dumplocalfile2, ...) for topology information. This will update the topology information from data files.
+
+        Parameters:
+            dumplocalfile1, dumplocalfile2, ...: string
+                Name of LAMMPS dump local file(s).
+
+            overwrite: bool (default=True)
+                When multiple dump files are read, some dump files might contain snapshots with the same timestep as the snapshots from 
+                previous dump files. This could happen if simulations are restarted from a specific snapshot from previous dump file.
+                It decides whether to overwrite the old snapshots from previous dump files with the new ones if they share the same timestep.
+
+            require_same_dump_freq: bool (default=True)
+                When multiple dump files are read, they might not be generated with the same dump frequency. This could cause trouble when
+                calculating time dependent properties. When set to True, it will check if all dump files share the same dump frequency.
+
+        Return:
+            None.
+        """
+        tmp_VecInt = _VecInt()
+        if len(dumplocalfiles) > 0:
+            self._dumps_topo._dumpfile = [_ReadDump(dumpfile) for dumpfile in dumplocalfiles]
+
+            # the first dump file
+            _ = self._dumps_topo._dumpfile[0].GetTimesteps(tmp_VecInt)
+            self._dumps_topo._timesteps = np.array(list(tmp_VecInt))
+            self._dumps_topo._frame_dict = {ii: (0, ii, self._dumps_topo._timesteps[ii]) for ii in range(len(self._dumps_topo._timesteps))}
+
+            # the remaining dump files
+            for i in range(1,len(dumplocalfiles)):
+                _ = self._dumps_topo._dumpfile[i].GetTimesteps(tmp_VecInt)
+                tmp_timesteps = np.array(list(tmp_VecInt))
+                if require_same_dump_freq and tmp_timesteps[1] - tmp_timesteps[0] != self._dumps_topo._timesteps[1] - self._dumps_topo._timesteps[0]:
+                    raise RuntimeError("Dump local files don't share the same dump frequency.")
+                ### if the first timestep is 0, it assumes the first timestep is the same as the last timestep from the previous dump file
+                if tmp_timesteps[0] == 0:
+                    tmp_timesteps += self._dumps_topo._timesteps[-1]
+                for ii in range(len(tmp_timesteps)):
+                    if tmp_timesteps[ii] in self._dumps_topo._timesteps:
+                        if overwrite:
+                            ind = np.where(self._dumps_topo._timesteps == tmp_timesteps[ii])[0][0]
+                            print("timestep %d: replace dump local file no.%d frame no.%d -> dump local file no.%d frame no.%d" % 
+                                  (tmp_timesteps[ii], self._dumps_topo._frame_dict[ind][0]+1, self._dumps_topo._frame_dict[ind][1]+1, i+1, ii+1))
+                            self._dumps_topo._frame_dict[ind] = (i, ii, tmp_timesteps[ii])
+                    else:
+                        self._dumps_topo._timesteps = np.append(self._dumps_topo._timesteps, tmp_timesteps[ii])
+                        self._dumps_topo._frame_dict[len(self._dumps_topo._timesteps)-1] = (i, ii, tmp_timesteps[ii])
+        else:
+            raise RuntimeError("no dump local file is provided.")        
+
+    def set_topo_file(self, dumplocalfile):
+        """
+        set_topo_file(dumplocalfile):
+            Set a dump local file (dumplocalfile) for topology information. This will update the topology information from data file.
+        
+        Return:
+            None.
+        """
+        self.set_topo_files(dumplocalfile)
 
     def traj_time(self):
         """
@@ -207,9 +275,9 @@ class data:
             timesteps: python list (int)
                 All timesteps in the trajactory dump file.
         """
-        if self._dumps is None:
+        if self._dumps._dumpfile is None:
             raise RuntimeError("Please set trajectory dump file by member function set_traj_file(dumpfile) first.")
-        return list(self._timesteps)
+        return list(self._dumps._timesteps)
 
     def load_traj(self, N):
         """
@@ -230,19 +298,39 @@ class data:
             for i in range(len(alltime)):
                 d.load_traj(i)
         """
-        if self._dumps is None:
+        if self._dumps._dumpfile is None:
             raise RuntimeError("Please set trajectory dump file by member function set_traj_file(dumpfile) first.")
-        dumpid, frameid, timestep = self._frame_dict[N]
-        ret = self._dumps[dumpid].Read_Frame(frameid, self._step)
+        dumpid, frameid, timestep = self._dumps._frame_dict[N]
+        ret = self._dumps._dumpfile[dumpid].Read_Frame(frameid, self._step)
         if ret == 0:
             self._step.Timestep = int(timestep)
             ### build the AtomID --> Atom index mapping
-            self._dumps[dumpid].IDMapping(self._idmapping_atom, self._step)
+            self._dumps._dumpfile[dumpid].IDMapping(self._idmapping_atom, self._step)
             if self._print_flag:
                 print("Current step's timestep = %d" % self._step.Timestep)
         else:
             raise RuntimeError("Fail to read dump file.")
 
+    def load_topo(self, N):
+        """
+        Read the Nth frame from the topology dump local file(s) for topology information. This will update the topology information.
+
+        Parameters:
+            N, int
+                Index of a timestep.
+
+        Return:
+            None.
+        """
+        if self._dumps_topo._dumpfile is None:
+            raise RuntimeError("Please set topology dump local file by member function set_topo_file(dumplocalfile) or set_topo_files(dumplocalfile1, dumplocalfile2, ...) first.")
+        dumpid, frameid, timestep = self._dumps_topo._frame_dict[N]
+        if self._step.Timestep != int(timestep):
+            raise RuntimeError("Timestep mismatch between trajectory and topology files.")
+        ret = self._dumps_topo._dumpfile[dumpid].Read_Frame(frameid, self._step)
+        if ret != 0:
+            raise RuntimeError("Fail to read topology dump local file.")
+        
     def wrap(self):
         """
         wrap()
