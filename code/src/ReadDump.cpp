@@ -1,7 +1,7 @@
 /***********************************************************/
 /*** Refer to header file for instructions of this class ***/
 /***********************************************************/
-/*** Version: 07/16/2016 (1.0 Version)  ***/
+/*** Version: 05/19/2026 (1.1 Version)  ***/
 /*** By: Heyi Liang                     ***/
 /******************************************/
 
@@ -12,8 +12,10 @@
 ReadDump::ReadDump(string FileName)
 {
     ID=TYPE=MOL=X=Y=Z=IX=IY=IZ=VX=VY=VZ=WX=WY=WZ=FX=FY=FZ=Q=-1;
+    BTYPE=BATOM1=BATOM2=ATYPE=AATOM1=AATOM2=AATOM3=DTYPE=DATOM1=DATOM2=DATOM3=DATOM4=ITYPE=IATOM1=IATOM2=IATOM3=IATOM4=-1;
 
     line = new char[MAXLINE];
+    label = new char[MAXLINE];    // "ATOMS", "BONDS", "ANGLES", "DIHEDRALS", "IMPROPERS", "ENTRIES", or others 
 
     // record the file name
     InFileName = FileName;
@@ -53,6 +55,7 @@ ReadDump::ReadDump(string FileName)
 ReadDump::~ReadDump()
 {
     delete[] line;
+    delete[] label;
     fclose(pFile);
 }
 
@@ -107,10 +110,13 @@ int ReadDump::CheckAndScanFile()
             TimestepsHeadPos.push_back(fpos);
             printf("Scanning file... %d%%\r",(int)(ftell(pFile) * 100 / flength));
 
-            // read next two line for number of atom, then skip all the data until the next snapshot is reached
+            // read next two line for number of atom/entries, then skip all the data until the next snapshot is reached
             fgets(line, MAXLINE, pFile);
-            if ( strstr(line, "ITEM: NUMBER OF ATOMS") == line )
+            if ( strstr(line, "ITEM: NUMBER OF ") == line )
             {
+                if ( sscanf(line + 16, "%s", label) != 1 )    // 16 characters in "ITEM: NUMBER OF "
+                    fprintf(stderr, "Wrong file format! Cannot find label after \"ITEM: NUMBER OF \"!\n");
+
                 fgets(line, MAXLINE, pFile);
                 tmpint = atoi(line);
                 for (int i = 0; i < tmpint + 5; i++)
@@ -120,13 +126,13 @@ int ReadDump::CheckAndScanFile()
             {
                 fprintf(stderr, "Wrong file format!\n");
                 return 1;
-            }
-            
+            }            
         }
         fpos = ftell(pFile);
     }
 
     printf("\n");
+    printf("label = %s\n", label);
 
     clearerr(pFile);
     return 0;
@@ -135,7 +141,10 @@ int ReadDump::CheckAndScanFile()
 int ReadDump::FindProperties()
 {
     char* pch;
+    char target[MAXLINE];
     string tmps;
+
+    snprintf(target, MAXLINE, "ITEM: %s", label);
 
     // clear the possible error state of the file stream and set the position to the beginning of the file
     clearerr(pFile);
@@ -143,10 +152,10 @@ int ReadDump::FindProperties()
 
     // read the file
     while ( fgets(line, MAXLINE, pFile) != NULL )
-        // when read "ITEM: ATOMS" from file, get the remaining part of this line
-        if ( strstr(line, "ITEM: ATOMS") == line )
+        // when read "ITEM: XXX" from file, get the remaining part of this line
+        if ( strstr(line, target) == line )
             break;
-    // tokenize line and skip first two token (which is "ITEM:" and "ATOMS")
+    // tokenize line and skip first two token (which is "ITEM:" and "XXX"(label, could be "ATOMS", "BONDS", "ANGLES", "DIHEDRALS", "IMPROPERS", or "ENTRIES", depending on the format of dump file))
     pch = strtok(line, " \t\n");
     pch = strtok(NULL, " \t\n");
 
@@ -194,6 +203,7 @@ int ReadDump::BasicPropertyMapping()
 {
     for (int i = 0; i < (int)Properties.size(); i++)
     {
+        // atom properties
         if ( Properties[i] == "id" )
             ID = i;
         else if ( Properties[i] == "mol" )
@@ -232,6 +242,41 @@ int ReadDump::BasicPropertyMapping()
             FZ = i;
         else if ( Properties[i] == "q" )
             Q = i;
+        // bond, angle, dihedral and improper properties
+        else if ( Properties[i] == "btype" )
+            BTYPE = i;
+        else if ( Properties[i] == "batom1" )
+            BATOM1 = i;
+        else if ( Properties[i] == "batom2" )
+            BATOM2 = i;
+        else if ( Properties[i] == "atype" )
+            ATYPE = i;
+        else if ( Properties[i] == "aatom1" )
+            AATOM1 = i;
+        else if ( Properties[i] == "aatom2" )
+            AATOM2 = i;
+        else if ( Properties[i] == "aatom3" )
+            AATOM3 = i;
+        else if ( Properties[i] == "dtype" )
+            DTYPE = i;
+        else if ( Properties[i] == "datom1" )
+            DATOM1 = i;
+        else if ( Properties[i] == "datom2" )
+            DATOM2 = i;
+        else if ( Properties[i] == "datom3" )
+            DATOM3 = i;
+        else if ( Properties[i] == "datom4" )
+            DATOM4 = i;
+        else if ( Properties[i] == "itype" )
+            ITYPE = i;
+        else if ( Properties[i] == "iatom1" )
+            IATOM1 = i;
+        else if ( Properties[i] == "iatom2" )
+            IATOM2 = i;
+        else if ( Properties[i] == "iatom3" )
+            IATOM3 = i;
+        else if ( Properties[i] == "iatom4" )
+            IATOM4 = i;
     }
     return 0;
 }
@@ -241,43 +286,84 @@ int ReadDump::ReadOneSnapshot(int Frame, long FilePos, STEP& step_destin)
 {
     int tmpint;
     char *pch;
+    char target1[MAXLINE], target2[MAXLINE];
     int buffer_size;
     int NumOfProperties;
     //char *pStart;
     const char* pChar;
 
+    snprintf(target1, MAXLINE, "ITEM: %s", label);
+    snprintf(target2, MAXLINE, "ITEM: NUMBER OF %s", label);
+
     // clear the possible error state of the file stream and set the position to the beginning of the file
     clearerr(pFile);
     fseek(pFile, FilePos, SEEK_SET);
 
-    // assign properties
-    vector<string>().swap(step_destin.Properties);
-    step_destin.Properties = Properties;
+    if (strcmp(label, "ATOMS") == 0)
+    {
+        // assign properties for dump file
+        step_destin.Properties = Properties;
 
-    // assign coordinate type
-    step_destin.wrapped_flag = wrapped_flag;
-    step_destin.scaled_flag = scaled_flag;
+        // assign coordinate type
+        step_destin.wrapped_flag = wrapped_flag;
+        step_destin.scaled_flag = scaled_flag;
 
-    // assign basic properties mapping
-    step_destin.ID = ID;
-    step_destin.TYPE = TYPE;
-    step_destin.MOL = MOL;
-    step_destin.X = X;
-    step_destin.Y = Y;
-    step_destin.Z = Z;
-    step_destin.IX = IX;
-    step_destin.IY = IY;
-    step_destin.IZ = IZ;
-    step_destin.VX = VX;
-    step_destin.VY = VY;
-    step_destin.VZ = VZ;
-    step_destin.WX = WX;
-    step_destin.WY = WY;
-    step_destin.WZ = WZ;
-    step_destin.FX = FX;
-    step_destin.FY = FY;
-    step_destin.FZ = FZ;
-    step_destin.Q = Q;
+        // assign basic properties mapping
+        step_destin.ID = ID;
+        step_destin.TYPE = TYPE;
+        step_destin.MOL = MOL;
+        step_destin.X = X;
+        step_destin.Y = Y;
+        step_destin.Z = Z;
+        step_destin.IX = IX;
+        step_destin.IY = IY;
+        step_destin.IZ = IZ;
+        step_destin.VX = VX;
+        step_destin.VY = VY;
+        step_destin.VZ = VZ;
+        step_destin.WX = WX;
+        step_destin.WY = WY;
+        step_destin.WZ = WZ;
+        step_destin.FX = FX;
+        step_destin.FY = FY;
+        step_destin.FZ = FZ;
+        step_destin.Q = Q;
+    }
+    else
+    {
+        // assign entry properties for dump local file
+        step_destin.EntryProperties = Properties;
+    }
+
+    if (strcmp(label, "BONDS") == 0)
+    {
+        step_destin.BTYPE = BTYPE;
+        step_destin.BATOM1 = BATOM1;
+        step_destin.BATOM2 = BATOM2;
+    }
+    if (strcmp(label, "ANGLES") == 0)
+    {
+        step_destin.ATYPE = ATYPE;
+        step_destin.AATOM1 = AATOM1;
+        step_destin.AATOM2 = AATOM2;
+        step_destin.AATOM3 = AATOM3;
+    }
+    if (strcmp(label, "DIHEDRALS") == 0)
+    {
+        step_destin.DTYPE = DTYPE;
+        step_destin.DATOM1 = DATOM1;
+        step_destin.DATOM2 = DATOM2;
+        step_destin.DATOM3 = DATOM3;
+        step_destin.DATOM4 = DATOM4;
+    }
+    if (strcmp(label, "IMPROPERS") == 0)
+    {
+        step_destin.ITYPE = ITYPE;
+        step_destin.IATOM1 = IATOM1;
+        step_destin.IATOM2 = IATOM2;
+        step_destin.IATOM3 = IATOM3;
+        step_destin.IATOM4 = IATOM4;
+    }
 
 /* read timestep */
     // make sure it is reading the snapshot with required Timestep
@@ -299,15 +385,18 @@ int ReadDump::ReadOneSnapshot(int Frame, long FilePos, STEP& step_destin)
     }
     step_destin.Timestep = Timesteps[Frame];
 
-/* read number of atoms */
+/* read number of atoms/entries */
     fgets(line, MAXLINE, pFile);
-    if ( strstr(line, "ITEM: NUMBER OF ATOMS") != line )
+    if ( strstr(line, target2) != line )
     {
         fprintf(stderr, "The input file is not in correct format!\n");
         return 1;
     }
     fgets(line, MAXLINE, pFile);
-    step_destin.NumOfAtoms = atoi(line);
+    if ( strcmp(label, "ATOMS") == 0 )
+        step_destin.NumOfAtoms = atoi(line);
+    else
+        step_destin.NumOfEntries = atoi(line);
 
 /* read box */
     fgets(line, MAXLINE, pFile);
@@ -372,10 +461,10 @@ int ReadDump::ReadOneSnapshot(int Frame, long FilePos, STEP& step_destin)
     }
     step_destin.Box.set_box(true);
 
-/* read atoms */
+/* read atoms/entries */
     // read the next lines to insure that it is atoms information
     fgets(line, MAXLINE, pFile);
-    if ( strstr(line, "ITEM: ATOMS") != line )
+    if ( strstr(line, target1) != line )
     {
         fprintf(stderr, "The input file is not in correct format!\n");
         return 1;
@@ -394,35 +483,157 @@ int ReadDump::ReadOneSnapshot(int Frame, long FilePos, STEP& step_destin)
     {
         buffer_size = TimestepsHeadPos[Frame+1] - tmpFilePos;
     }
-    block = new char [buffer_size];
-    if ( (int)fread(block,1,buffer_size,pFile) != buffer_size )
+    if (buffer_size < 0)
     {
-        fprintf(stderr, "Reading Error!\n");
+        fprintf(stderr, "Invalid snapshot buffer size!\n");
         return 1;
     }
 
-    // allocate space for step_destin.Atoms
-    // allocation only happens when NumOfAtoms changes
-    // Atom information will be written into step_destin.Atoms, step_destin.Atoms[i][j] means the jth property of the ith atom (i = atom index)
-    NumOfProperties = (int)Properties.size();
-    if ( (int)step_destin.Atoms.size() != step_destin.NumOfAtoms || (int)step_destin.Atoms[0].size() != NumOfProperties )
+    block = new char [buffer_size + 1];
+    if ( (int)fread(block,1,buffer_size,pFile) != buffer_size )
     {
-        vector< vector<double> >().swap(step_destin.Atoms);
-        step_destin.Atoms.resize(step_destin.NumOfAtoms);
-        for (int i = 0; i < step_destin.NumOfAtoms; i++)
-        step_destin.Atoms[i].resize(NumOfProperties);
+        fprintf(stderr, "Reading Error!\n");
+        delete[] block;
+        return 1;
     }
+    block[buffer_size] = '\0';
 
-//    pStart = block;
-    pChar = block;
-
-    for (int i = 0; i < step_destin.NumOfAtoms; i++)
-        for (int j = 0; j < NumOfProperties; j++)
+    // update step_destin information
+    NumOfProperties = (int)Properties.size();
+    if (strcmp(label, "ATOMS") == 0)
+    {
+        // allocate space for step_destin.Atoms, allocation only happens when NumOfAtoms or NumOfProperties changes
+        // Atom information will be written into step_destin.Atoms, step_destin.Atoms[i][j] means the jth property of the ith atom (i = atom index)
+        if ( (int)step_destin.Atoms.size() != step_destin.NumOfAtoms ||
+             (step_destin.NumOfAtoms > 0 && (int)step_destin.Atoms[0].size() != NumOfProperties) )
         {
-//            step_destin.Atoms[i][j] = strtod(pStart, &pStart);
-            step_destin.Atoms[i][j] = StringToDouble(&pChar);
+            vector< vector<double> >().swap(step_destin.Atoms);
+            step_destin.Atoms.resize(step_destin.NumOfAtoms);
+            for (int i = 0; i < step_destin.NumOfAtoms; i++)
+                step_destin.Atoms[i].resize(NumOfProperties);
         }
 
+        //pStart = block;
+        pChar = block;
+
+        for (int i = 0; i < step_destin.NumOfAtoms; i++)
+            for (int j = 0; j < NumOfProperties; j++)
+            {
+                //step_destin.Atoms[i][j] = strtod(pStart, &pStart);
+                step_destin.Atoms[i][j] = StringToDouble(&pChar);
+            }
+    }
+    else
+    {
+        // allocate space for step_destin.Entries, allocation only happens when NumOfEntries or NumOfProperties changes
+        if ( (int)step_destin.Entries.size() != step_destin.NumOfEntries ||
+             (step_destin.NumOfEntries > 0 && (int)step_destin.Entries[0].size() != NumOfProperties) )
+        {
+            vector< vector<double> >().swap(step_destin.Entries);
+            step_destin.Entries.resize(step_destin.NumOfEntries);
+            for (int i = 0; i < step_destin.NumOfEntries; i++)
+                step_destin.Entries[i].resize(NumOfProperties);
+        }
+
+        //pStart = block;
+        pChar = block;
+
+        for (int i = 0; i < step_destin.NumOfEntries; i++)
+            for (int j = 0; j < NumOfProperties; j++)
+            {
+                //step_destin.Atoms[i][j] = strtod(pStart, &pStart);
+                step_destin.Entries[i][j] = StringToDouble(&pChar);
+            }
+    }
+
+    // if label is "BONDS", and properties includes "btype", "batom1", and "batom2", then read bond information from step_destin.Entries into step_destin.Bonds
+    if (strcmp(label, "BONDS") == 0 && BTYPE != -1 && BATOM1 != -1 && BATOM2 != -1)
+    {
+        step_destin.NumOfBonds = step_destin.NumOfEntries;
+        if ( (int)step_destin.Bonds.size() != step_destin.NumOfBonds )
+        {
+            vector< vector<int> >().swap(step_destin.Bonds);
+            step_destin.Bonds.resize(step_destin.NumOfBonds);
+            for (int i = 0; i < step_destin.NumOfBonds; i++)
+                step_destin.Bonds[i].resize(4);
+        }
+
+        for (int i = 0; i < step_destin.NumOfBonds; i++)
+        {
+            step_destin.Bonds[i][0] = i;
+            step_destin.Bonds[i][1] = (int)step_destin.Entries[i][BTYPE];
+            step_destin.Bonds[i][2] = (int)step_destin.Entries[i][BATOM1];
+            step_destin.Bonds[i][3] = (int)step_destin.Entries[i][BATOM2];
+        }
+    }
+
+    // if label is "ANGLES", and properties includes "atype", "aatom1", "aatom2", and "aatom3", then read angle information from step_destin.Entries into step_destin.Angles
+    if (strcmp(label, "ANGLES") == 0 && ATYPE != -1 && AATOM1 != -1 && AATOM2 != -1 && AATOM3 != -1)
+    {
+        step_destin.NumOfAngles = step_destin.NumOfEntries;
+        if ( (int)step_destin.Angles.size() != step_destin.NumOfAngles )
+        {
+            vector< vector<int> >().swap(step_destin.Angles);
+            step_destin.Angles.resize(step_destin.NumOfAngles);
+            for (int i = 0; i < step_destin.NumOfAngles; i++)
+                step_destin.Angles[i].resize(5);
+        }
+
+        for (int i = 0; i < step_destin.NumOfAngles; i++)
+        {
+            step_destin.Angles[i][0] = i;
+            step_destin.Angles[i][1] = (int)step_destin.Entries[i][ATYPE];
+            step_destin.Angles[i][2] = (int)step_destin.Entries[i][AATOM1];
+            step_destin.Angles[i][3] = (int)step_destin.Entries[i][AATOM2];
+            step_destin.Angles[i][4] = (int)step_destin.Entries[i][AATOM3];
+        }
+    }
+
+    // if label is "DIHEDRALS", and properties includes "dtype", "datom1", "datom2", "datom3", and "datom4", then read dihedral information from step_destin.Entries into step_destin.Dihedrals
+    if (strcmp(label, "DIHEDRALS") == 0 && DTYPE != -1 && DATOM1 != -1 && DATOM2 != -1 && DATOM3 != -1 && DATOM4 != -1)
+    {
+        step_destin.NumOfDihedrals = step_destin.NumOfEntries;
+        if ( (int)step_destin.Dihedrals.size() != step_destin.NumOfDihedrals )
+        {
+            vector< vector<int> >().swap(step_destin.Dihedrals);
+            step_destin.Dihedrals.resize(step_destin.NumOfDihedrals);
+            for (int i = 0; i < step_destin.NumOfDihedrals; i++)
+                step_destin.Dihedrals[i].resize(6);
+        }
+
+        for (int i = 0; i < step_destin.NumOfDihedrals; i++)
+        {
+            step_destin.Dihedrals[i][0] = i;
+            step_destin.Dihedrals[i][1] = (int)step_destin.Entries[i][DTYPE];
+            step_destin.Dihedrals[i][2] = (int)step_destin.Entries[i][DATOM1];
+            step_destin.Dihedrals[i][3] = (int)step_destin.Entries[i][DATOM2];
+            step_destin.Dihedrals[i][4] = (int)step_destin.Entries[i][DATOM3];
+            step_destin.Dihedrals[i][5] = (int)step_destin.Entries[i][DATOM4];
+        }
+    }
+
+    // if label is "IMPROPERS", and properties includes "itype", "iatom1", "iatom2", "iatom3", and "iatom4", then read improper information from step_destin.Entries into step_destin.Impropers
+    if (strcmp(label, "IMPROPERS") == 0 && ITYPE != -1 && IATOM1 != -1 && IATOM2 != -1 && IATOM3 != -1 && IATOM4 != -1)
+    {
+        step_destin.NumOfImpropers = step_destin.NumOfEntries;
+        if ( (int)step_destin.Impropers.size() != step_destin.NumOfImpropers )
+        {
+            vector< vector<int> >().swap(step_destin.Impropers);
+            step_destin.Impropers.resize(step_destin.NumOfImpropers);
+            for (int i = 0; i < step_destin.NumOfImpropers; i++)
+                step_destin.Impropers[i].resize(6);
+        }
+
+        for (int i = 0; i < step_destin.NumOfImpropers; i++)
+        {
+            step_destin.Impropers[i][0] = i;
+            step_destin.Impropers[i][1] = (int)step_destin.Entries[i][ITYPE];
+            step_destin.Impropers[i][2] = (int)step_destin.Entries[i][IATOM1];
+            step_destin.Impropers[i][3] = (int)step_destin.Entries[i][IATOM2];
+            step_destin.Impropers[i][4] = (int)step_destin.Entries[i][IATOM3];
+            step_destin.Impropers[i][5] = (int)step_destin.Entries[i][IATOM4];
+        }
+    }
     delete[] block;
 
     return 0;
@@ -433,8 +644,11 @@ double ReadDump::StringToDouble(const char **p)
     double r = 0.0;
     bool neg = false;
 
-    while ( !(**p >= '0' && **p <= '9') && **p != '-' )
+    while ( **p != '\0' && !(**p >= '0' && **p <= '9') && **p != '-' )
         ++(*p);
+
+    if ( **p == '\0' )
+        return 0.0;
 
     if ( **p == '-' )
     {

@@ -103,10 +103,17 @@ STEP::STEP()
     NumOfAngles = NumOfAngleTypes = 0;
     NumOfDihedrals = NumOfDihedralTypes = 0;
     NumOfImpropers = NumOfImproperTypes = 0;
+    NumOfEntries = 0;
     vector< vector<int> >().swap(Bonds);
     vector< vector<int> >().swap(Angles);
     vector< vector<int> >().swap(Dihedrals);
     vector< vector<int> >().swap(Impropers);
+    vector< vector<double> >().swap(Entries);
+    vector<string>().swap(EntryProperties);
+    BTYPE = BATOM1 = BATOM2 = -1;
+    ATYPE = AATOM1 = AATOM2 = AATOM3 = -1;
+    DTYPE = DATOM1 = DATOM2 = DATOM3 = DATOM4 = -1;
+    ITYPE = IATOM1 = IATOM2 = IATOM3 = IATOM4 = -1;
 }
 
 STEP::~STEP()
@@ -119,6 +126,8 @@ STEP::~STEP()
     vector< vector<int> >().swap(Angles);
     vector< vector<int> >().swap(Dihedrals);
     vector< vector<int> >().swap(Impropers);
+    vector< vector<double> >().swap(Entries);
+    vector<string>().swap(EntryProperties);
 }
 
 void STEP::x2lamda() {

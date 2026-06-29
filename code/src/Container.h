@@ -3,9 +3,9 @@
 /*** produced by lammps dump command.                                                                ***/
 /*******************************************************************************************************/
 /*** Major revision:                                                                                 ***/
-/*** (1) Add: Add Masses, which is read from data file.                                              ***/
+/*** (1) Add: Add Entries, which is read from dump local file.                                       ***/
 /*******************************************************************************************************/
-/*** Version: 11/12/2018 (1.2 Version)  ***/
+/*** Version: 05/19/2026 (1.3 Version)  ***/
 /*** By: Heyi Liang                     ***/
 /******************************************/
 
@@ -49,16 +49,24 @@ struct STEP
     int scaled_flag;            // 0: unscaled, 1:scaled
     int ID,TYPE,MOL,DIAMETER,DENSITY,X,Y,Z,IX,IY,IZ,VX,VY,VZ,WX,WY,WZ,FX,FY,FZ,Q;        // basic properties mapping (X,Y,Z for coordinates, whether they are wrapped or scaled, depends on wrapped_flag and scaled_flag)
 
-    /* additional information provided by data file */
+    /* additional information provided by data file or dump local file */
+    /* Bonds, Angles, Dihedrals, Impropers could be updated by dump local file */
     int NumOfAtomTypes;
     int NumOfBonds, NumOfBondTypes;
     int NumOfAngles, NumOfAngleTypes;
     int NumOfDihedrals, NumOfDihedralTypes;
     int NumOfImpropers, NumOfImproperTypes;
+    int NumOfEntries;                      // number of entries in dump local file, used when label is not "ATOMS"
     vector< vector<int> > Bonds;           // record bond properties, including BondID, Bond Type, Bonded Atom1's ID, Bonded Atom2's ID
     vector< vector<int> > Angles;          // record angle properties, including AngleID, Angle Type, Atom1's ID, Atom2's ID, Atom3's ID 
     vector< vector<int> > Dihedrals;       // record dihedral properties, including DihedralID, Dihedral Type, Atom1's ID, Atom2's ID, Atom3's ID, Atom4's ID
     vector< vector<int> > Impropers;       // record improper properties, including ImproperID, Improper Type, Atom1's ID, Atom2's ID, Atom3's ID, Atom4's ID
+    vector< vector<double> > Entries;      // record entries in dump local file, used when label is not "ATOMS"
+    vector<string> EntryProperties;        // record the name of properties in dump local file, used when label is not "ATOMS"
+    int BTYPE, BATOM1, BATOM2;                      // basic properties mapping for bond
+    int ATYPE, AATOM1, AATOM2, AATOM3;              // basic properties mapping for angle
+    int DTYPE, DATOM1, DATOM2, DATOM3, DATOM4;      // basic properties mapping for dihedral
+    int ITYPE, IATOM1, IATOM2, IATOM3, IATOM4;      // basic properties mapping for improper
 
     STEP();
     ~STEP();
