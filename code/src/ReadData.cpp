@@ -854,6 +854,7 @@ double ReadData::StringToDouble(const char **p)
             e_neg = true;
             ++(*p);
         }
+        else if ( **p == '+' )
         {
             ++(*p);
         }
