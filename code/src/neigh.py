@@ -321,7 +321,8 @@ class neigh:
             TYPE = d.map("type")
             idmapping = d.idtoindex()
             ne = neigh()
-            ne.set_snapshot(d) 
+            ne.set_snapshot(d)
+            ne.set_topology(d, inter_mol=True, intra_mol=True, exclude_bond=False, exclude_angle=False, exclude_dihedral=False, exclude_improper=False)
             cutoff = 2.5
             cluster_mask = atoms[:,TYPE] == 1
             cluster_id = ne.cluster_analysis(cutoff, cluster_mask)
@@ -330,6 +331,8 @@ class neigh:
             raise RuntimeError("Please set the snapshot first. Use the member function set_snapshot.")
         if self._step.wrapped_flag != 1:
             raise RuntimeError("Please wrap the coordinate first.")
+        if not self._topology_set_flag:
+            raise RuntimeError("Please set topology first. Use the member function set_topology.")
 
         if cluster_mask is None:
             cluster_atoms_mask = np.ones(self._step.NumOfAtoms).astype(np.int32)
